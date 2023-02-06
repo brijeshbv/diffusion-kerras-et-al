@@ -96,7 +96,7 @@ class SongUNet(torch.nn.Module):
                 self.dec[f'{res}x{res}_aux_norm'] = GroupNorm(num_channels=cout, eps=1e-6)
                 self.dec[f'{res}x{res}_aux_conv'] = Conv2d(in_channels=cout, out_channels=out_channels, kernel=3, **init_zero)
 
-    def forward(self, x, noise_labels, class_labels, augment_labels=None):
+    def forward(self, x, noise_labels, class_labels = None, augment_labels=None):
         # Mapping.
         emb = self.map_noise(noise_labels)
         emb = emb.reshape(emb.shape[0], 2, -1).flip(1).reshape(*emb.shape) # swap sin/cos
@@ -245,6 +245,21 @@ class UNetBlock(torch.nn.Module):
             x = x * self.skip_scale
         return x
 
+
+class AttentionOp(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, q, k):
+        w = torch.einsum('ncq,nck->nqk', q.to(torch.float32), (k / np.sqrt(k.shape[1])).to(torch.float32)).softmax(dim=2).to(q.dtype)
+        ctx.save_for_backward(q, k, w)
+        return w
+
+    @staticmethod
+    def backward(ctx, dw):
+        q, k, w = ctx.saved_tensors
+        db = torch._softmax_backward_data(grad_output=dw.to(torch.float32), output=w.to(torch.float32), dim=2, input_dtype=torch.float32)
+        dq = torch.einsum('nck,nqk->ncq', k.to(torch.float32), db).to(q.dtype) / np.sqrt(k.shape[1])
+        dk = torch.einsum('ncq,nqk->nck', q.to(torch.float32), db).to(k.dtype) / np.sqrt(k.shape[1])
+        return dq, dk
 
 @persistence.persistent_class
 class Conv2d(torch.nn.Module):
