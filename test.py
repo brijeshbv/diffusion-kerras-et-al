@@ -72,6 +72,7 @@ reals = input_images.to(device)
 noise = torch.randn_like(reals)
 sigma = torch.distributions.LogNormal(sigma_mean, sigma_std).sample([reals.shape[0]]).to(device)
 noised_input = reals + noise * utils.append_dims(sigma, reals.ndim)
+print("this", noised_input.shape, sigma.shape)
 utils.to_pil_image(tv_utils.make_grid(noised_input))
 
 
@@ -80,3 +81,16 @@ print(inner_model_edm_output.shape)
 
 inner_model_vpsong_output = inner_model_vpsong(noised_input, sigma)
 print(inner_model_vpsong_output.shape)
+
+outer_model_edm = layers.Denoiser(inner_model_edm, sigma_data=0.5).to(device)
+edm_model_output = outer_model_edm(noised_input, sigma)
+print(edm_model_output.shape)
+edm_loss = outer_model_edm.loss(noised_input, noise, sigma)
+print(edm_loss.mean())
+
+
+outer_model_vpsong = layers.DenoiserVPScore(inner_model_vpsong, sigma_data=0.5).to(device)
+vpsong_model_output = outer_model_vpsong(noised_input, sigma)
+print(vpsong_model_output.shape)
+vpsong_loss = outer_model_vpsong.loss(noised_input, noise, sigma)
+print(vpsong_loss.mean())

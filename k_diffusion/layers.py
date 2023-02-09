@@ -4,6 +4,7 @@ from einops import rearrange, repeat
 import torch
 from torch import nn
 from torch.nn import functional as F
+import numpy as np
 
 from . import utils
 
@@ -46,7 +47,7 @@ class DenoiserVPScore(nn.Module):
         self.beta_min        = 0.1  
 
     def get_scalings(self, sigma):
-        c_skip = 1
+        c_skip = torch.tensor(np.ones(sigma.shape))
         c_out = -sigma
         c_in = 1 / (sigma ** 2 + 1).sqrt()
         c_noise = (self.M - 1) * self.sigma_inv(sigma)
@@ -59,13 +60,13 @@ class DenoiserVPScore(nn.Module):
     def loss(self, input, noise, sigma, **kwargs):
         c_skip, c_out, c_in, c_noise = [utils.append_dims(x, input.ndim) for x in self.get_scalings(sigma)]
         noised_input = input + noise * utils.append_dims(sigma, input.ndim)
-        model_output = self.inner_model(noised_input * c_in, c_noise, **kwargs)
+        model_output = self.inner_model(noised_input * c_in, c_noise.flatten(), **kwargs)
         target = (input - c_skip * noised_input) / c_out
         return (model_output - target).pow(2).flatten(1).mean(1)
 
     def forward(self, input, sigma, **kwargs):
         c_skip, c_out, c_in, c_noise = [utils.append_dims(x, input.ndim) for x in self.get_scalings(sigma)]
-        return self.inner_model(input * c_in, c_noise, **kwargs) * c_out + input * c_skip   
+        return self.inner_model(input * c_in, c_noise.flatten(), **kwargs) * c_out + input * c_skip   
 
 class DenoiserWithVariance(Denoiser):
     def loss(self, input, noise, sigma, **kwargs):
