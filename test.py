@@ -146,6 +146,9 @@ for epoch in range(1):
         demo()
     
     step += 1
+    if step % 1000 == 0:
+        torch.save(model.state_dict(), 'vp_model_faces64_1e.pt')
+
 
 torch.save(model.state_dict(), 'vp_model_faces64_1e.pt')
 wandb.finish()
