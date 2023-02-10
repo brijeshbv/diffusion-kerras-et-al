@@ -9,6 +9,7 @@ import numpy as np
 from . import utils
 
 # Karras et al. preconditioned denoiser
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class Denoiser(nn.Module):
     """A Karras et al. preconditioner for denoising diffusion models."""
@@ -47,7 +48,7 @@ class DenoiserVPScore(nn.Module):
         self.beta_min        = 0.1  
 
     def get_scalings(self, sigma):
-        c_skip = torch.tensor(np.ones(sigma.shape))
+        c_skip = torch.tensor(np.ones(sigma.shape)).to(device) 
         c_out = -sigma
         c_in = 1 / (sigma ** 2 + 1).sqrt()
         c_noise = (self.M - 1) * self.sigma_inv(sigma)
@@ -60,13 +61,13 @@ class DenoiserVPScore(nn.Module):
     def loss(self, input, noise, sigma, **kwargs):
         c_skip, c_out, c_in, c_noise = [utils.append_dims(x, input.ndim) for x in self.get_scalings(sigma)]
         noised_input = input + noise * utils.append_dims(sigma, input.ndim)
-        model_output = self.inner_model(noised_input * c_in, c_noise.flatten(), **kwargs)
+        model_output = self.inner_model(noised_input * c_in, c_noise.flatten(), **kwargs).to(device)
         target = (input - c_skip * noised_input) / c_out
         return (model_output - target).pow(2).flatten(1).mean(1)
 
     def forward(self, input, sigma, **kwargs):
         c_skip, c_out, c_in, c_noise = [utils.append_dims(x, input.ndim) for x in self.get_scalings(sigma)]
-        return self.inner_model(input * c_in, c_noise.flatten(), **kwargs) * c_out + input * c_skip   
+        return self.inner_model(input * c_in, c_noise.flatten(), **kwargs).to(device) * c_out + input * c_skip   
 
 class DenoiserWithVariance(Denoiser):
     def loss(self, input, noise, sigma, **kwargs):
