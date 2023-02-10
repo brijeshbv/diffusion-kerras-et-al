@@ -111,11 +111,12 @@ step = 0
 size = [64, 64]
 
 wandb.init(project='vp-diffusion-demo')
-
+sigma_max = 80
+sigma_min = 1e-2
 @torch.no_grad()
 @utils.eval_mode(model)
 def demo():
-    tqdm.write('Sampling...')
+    #tqdm.write('Sampling...')
     filename = f'demo_{step:08}.png'
     n_per_proc = 16
     x = torch.randn([n_per_proc, 3, size[0], size[1]], device=device) * sigma_max
@@ -126,7 +127,7 @@ def demo():
     wandb.log({'vp_demo_grid': wandb.Image(filename)}, step=step)
 
 for epoch in range(1):
-  for batch in tqdm(dl):
+  for batch in dl:
     opt.zero_grad()
     reals = batch.to(device)
     noise = torch.randn_like(reals)
@@ -138,8 +139,8 @@ for epoch in range(1):
 
     wandb.log({'epoch': epoch,'loss': loss.item(),'lr': sched.get_last_lr()[0]}, step=step)
 
-    if step % 50 == 0:
-      tqdm.write(f'Epoch: {epoch}, step: {step}, loss: {loss.item():g}')
+    # if step % 50 == 0:
+    #   tqdm.write(f'Epoch: {epoch}, step: {step}, loss: {loss.item():g}')
     
     if step % 250 == 0:
         demo()
